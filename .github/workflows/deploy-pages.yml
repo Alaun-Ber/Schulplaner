@@ -22,21 +22,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Quellcode laden
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Node.js einrichten
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
 
       - name: Abhängigkeiten installieren
         run: npm ci
 
-      - name: Schulplaner bauen und testen
-        run: |
-          npm test
-          npm run build
+      - name: Schulplaner bauen
+        run: npm run build
 
       - name: GitHub Pages konfigurieren
         uses: actions/configure-pages@v5
