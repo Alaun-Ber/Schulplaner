@@ -1,0 +1,2 @@
+import { Component, type ErrorInfo, type ReactNode } from 'react'
+export class ErrorBoundary extends Component<{children:ReactNode},{failed:boolean}> { state={failed:false}; static getDerivedStateFromError(){return{failed:true}}; componentDidCatch(_:Error,__:ErrorInfo){} render(){ return this.state.failed?<main className="fatal"><h1>Etwas ist schiefgegangen</h1><p>Deine lokalen Daten bleiben erhalten. Bitte lade die Anwendung neu.</p><button onClick={()=>location.reload()}>Neu laden</button></main>:this.props.children } }

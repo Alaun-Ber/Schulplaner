@@ -1,0 +1,2 @@
+import { render,screen } from '@testing-library/react';import { MemoryRouter } from 'react-router-dom';import { describe,expect,it } from 'vitest';import { App } from '../app/App'
+describe('Routing',()=>{it('öffnet die Aufgabenansicht über ihre Route',()=>{render(<MemoryRouter initialEntries={['/aufgaben']}><App/></MemoryRouter>);expect(screen.getAllByText('Aufgaben').length).toBeGreaterThan(0)})})

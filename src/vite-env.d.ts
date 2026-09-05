@@ -1,0 +1,4 @@
+/// <reference types="vite/client" />
+/// <reference types="vite-plugin-pwa/client" />
+interface Window { schoolPlannerAI?: { analyseMail:(subject:string,body:string)=>Promise<{suggestions:Array<{kind:'task'|'appointment';title:string;date:string|null;time:string|null;endTime:string|null;location:string|null;reason:string}>}>;status:()=>Promise<{ready:boolean;model:string}>;recentMail:(days:number)=>Promise<Array<{id:string;subject:string;sender:string;receivedAt:string;body:string}>>;mailContent:(id:string)=>Promise<{body:string}> } }
+interface Window { schoolPlannerCalDav?: { status:()=>Promise<{configured:boolean;url?:string;username?:string;lastSync?:string|null}>;save:(url:string,username:string,password:string)=>Promise<{events:import('./types').Appointment[];url:string;lastSync:string}>;sync:()=>Promise<{events:import('./types').Appointment[];url:string;lastSync:string}>;disconnect:()=>Promise<{configured:boolean}> } }
