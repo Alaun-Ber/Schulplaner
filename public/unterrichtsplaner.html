@@ -410,6 +410,15 @@
   .noten-kat-mitarbeit{ background:#FFE07A; font-weight:700; }
   .noten-kat-mitarbeit-light{ background:#FFF1B8; }
   .noten-endnote{ background:#E2E3DC; font-weight:700; color:var(--rose); font-size:14px; }
+  .noten-summary{display:grid;grid-template-columns:repeat(4,minmax(140px,1fr));gap:10px;margin:12px 0 18px}
+  .noten-summary>div{padding:14px;border:1px solid var(--line);border-radius:10px;background:#fff}
+  .noten-summary strong{display:block;font-size:23px;color:var(--navy);margin-top:4px}
+  .noten-chart{width:100%;min-width:620px;height:auto;display:block}
+  .noten-chart-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:#fff;padding:8px}
+  .noten-chart text{font-family:var(--font-body);font-size:11px;fill:var(--ink-soft)}
+  .noten-chart .grid{stroke:var(--line);stroke-width:1}.noten-chart .curve{fill:none;stroke:var(--navy-light);stroke-width:3;stroke-linejoin:round;stroke-linecap:round}
+  .noten-chart .point{stroke:#fff;stroke-width:2}.noten-chart .point-klassenarbeit{fill:#5A9B52}.noten-chart .point-lernkontrolle{fill:#D5A317}.noten-chart .point-mitarbeit{fill:#C78D45}
+  @media(max-width:700px){.noten-summary{grid-template-columns:repeat(2,1fr)}}
 
   .kr-cell{
     text-align:center;
@@ -3556,7 +3565,8 @@ function exportAbwesenheitenCsv(){
 /* ===================== NOTEN ===================== */
 let notenKlasseId = null;
 let notenSchuelerId = null;
-let notenEditingId = null;
+let leistungsVon = '';
+let leistungsBis = '';
 
 const NOTEN_KATEGORIEN = [
   {key:'klassenarbeit', label:'Klassenarbeiten'},
@@ -3594,7 +3604,7 @@ function renderNotenSchuelerAuswahl(){
       <div class="field-row" style="margin-bottom:0;align-items:end;">
         <div class="field grow">
           <label>Schüler:in für Noteneingabe und Bearbeitung auswählen</label>
-          <select onchange="notenSchuelerId=this.value;notenEditingId=null;renderNoten()">
+          <select onchange="notenSchuelerId=this.value;renderNoten()">
             ${liste.map(s=>`<option value="${s.id}" ${s.id===notenSchuelerId?'selected':''}>${esc(s.nachname)}, ${esc(s.vorname)}</option>`).join('')}
           </select>
         </div>
@@ -3803,7 +3813,7 @@ function renderNotenUebersicht(){
       ${zellen}
       <td class="noten-kat-mitarbeit"><strong>${formatKomma(allgemein, 2)}</strong></td>
       <td class="noten-endnote">${formatKomma(endnote, 2)}</td>
-      <td class="no-print"><button class="btn btn-sm btn-outline" onclick="notenSchuelerId='${s.id}'; renderNoten();">Noten verwalten</button></td>
+      <td class="no-print"><button class="btn btn-sm btn-outline" onclick="notenSchuelerId='${s.id}'; renderNoten();">Einzelübersicht</button></td>
     </tr>`;
   }).join('');
 
@@ -3841,97 +3851,46 @@ function renderNotenUebersicht(){
 function renderNotenDetail(){
   if(!notenSchuelerId || !state.schueler.some(s => s.id === notenSchuelerId)) return '';
   const s = state.schueler.find(s => s.id === notenSchuelerId);
+  const sj=aktuellesSchuljahr();
+  if(!leistungsVon) leistungsVon=sj?sj.von:'';
+  if(!leistungsBis) leistungsBis=sj?sj.bis:'';
+  const alle=state.noten.filter(n=>n.schuelerId===s.id).sort((a,b)=>(a.datum||'').localeCompare(b.datum||''));
+  const zeitraum=alle.filter(n=>(!leistungsVon||!n.datum||n.datum>=leistungsVon)&&(!leistungsBis||!n.datum||n.datum<=leistungsBis));
+  const schriftlich=schnittFuer(s.id,'klassenarbeit'),lern=schnittFuer(s.id,'lernkontrolle'),muendlich=schnittFuer(s.id,'mitarbeit'),allgemein=allgemeinerSchnittFuer(s.id),gesamt=endnoteFuer(s.id);
   return `
     <div class="card no-print">
-      <h2>${esc(s.nachname)}, ${esc(s.vorname)} — Einzelnoten</h2>
-      ${NOTEN_KATEGORIEN.map(kat => renderNotenKategorie(s.id, kat)).join('')}
-    </div>
-  `;
-}
-
-function renderNotenKategorie(schuelerId, kat){
-  const eintraege = state.noten.filter(n => n.schuelerId === schuelerId && n.kategorie === kat.key)
-    .sort((a,b) => (a.datum||'').localeCompare(b.datum||''));
-  const editing = notenEditingId ? eintraege.find(n => n.id === notenEditingId) : null;
-  return `
-    <div style="border-top:1px solid var(--line); padding-top:14px; margin-top:14px;">
-      <h3 style="font-family:var(--font-head); font-size:15px; margin:0 0 8px 0; color:var(--navy);">${kat.label}</h3>
-      ${eintraege.length === 0 ? '<p class="hint">Noch keine Einträge.</p>' : `
-      <table style="margin-bottom:10px;">
-        <thead><tr><th>Bezeichnung</th><th>Datum</th><th>Note</th><th>Gewichtung</th><th></th></tr></thead>
-        <tbody>
-          ${eintraege.map(n => `
-            <tr>
-              <td>${esc(n.bezeichnung)}</td>
-              <td>${n.datum ? formatDatum(n.datum) : '—'}</td>
-              <td>${noteBadge(n.wert,n.anzeige)}</td>
-              <td>
-                <input type="number" min="0" step="1" value="${n.gewicht === undefined || n.gewicht === null ? 100 : n.gewicht}" style="width:70px;" onchange="setNoteGewicht('${n.id}', this.value)"> %
-              </td>
-              <td><button class="icon-btn" onclick="notenEditingId='${n.id}';renderNoten()" title="Bearbeiten">✎</button> <button class="icon-btn" onclick="deleteNote('${n.id}')" title="Löschen">✕</button></td>
-            </tr>`).join('')}
-        </tbody>
-      </table>
-      <p class="hint" style="margin-top:-4px;">Die Gewichtung bestimmt, wie stark eine einzelne Note in den Kategorie-Durchschnitt eingeht (z. B. eine wichtige Arbeit mit 20 % gegenüber einer kurzen Kontrolle mit 10 %). Ohne Anpassung zählen alle Noten gleich (je 100 %).</p>`}
-      <div class="field-row" style="margin-bottom:0;">
-        <div class="field grow">
-          <label>Bezeichnung</label>
-          <input type="text" id="note-bez-${kat.key}" placeholder="z. B. Test Bruchrechnung" value="${editing?esc(editing.bezeichnung):''}">
-        </div>
-        <div class="field" style="max-width:100px;">
-          <label>Note</label>
-          <select id="note-wert-${kat.key}">
-            ${notenOptionen(editing?(editing.anzeige||String(editing.wert)):'1',false)}
-          </select>
-        </div>
-        <div class="field" style="max-width:150px;">
-          <label>Datum</label>
-          <input type="date" id="note-datum-${kat.key}" value="${editing&&editing.datum?editing.datum:''}">
-        </div>
-        <div class="field" style="max-width:120px;">
-          <label>Gewichtung (%)</label>
-          <input type="number" min="0" step="1" id="note-gewicht-${kat.key}" value="${editing&&(editing.gewicht!==undefined&&editing.gewicht!==null)?editing.gewicht:100}">
-        </div>
-        <button class="btn ${editing?'btn-primary':'btn-outline'}" onclick="saveNote('${schuelerId}','${kat.key}')">${editing?'✓ Änderungen speichern':'+ Hinzufügen'}</button>
-        ${editing?'<button class="btn btn-outline" onclick="notenEditingId=null;renderNoten()">Abbrechen</button>':''}
+      <div class="toolbar"><div><h2 style="margin:0;">${esc(s.nachname)}, ${esc(s.vorname)} — Leistungsübersicht</h2><p class="hint">Noten werden ausschließlich in der Klassentabelle eingegeben und dort bearbeitet.</p></div></div>
+      <div class="noten-summary">
+        <div>Schriftlicher Teil<strong>${formatKomma(schriftlich,2)}</strong></div>
+        <div>Lernkontrollen<strong>${formatKomma(lern,2)}</strong></div>
+        <div>Mündlich<strong>${formatKomma(muendlich,2)}</strong></div>
+        <div>Allgemeiner Teil<strong>${formatKomma(allgemein,2)}</strong></div>
+        <div style="grid-column:1/-1;background:var(--teal-light)">Gesamtnote<strong>${formatKomma(gesamt,2)}</strong></div>
       </div>
+      <div class="field-row" style="align-items:end">
+        <div class="field"><label>Leistungsverlauf von</label><input type="date" value="${leistungsVon}" onchange="leistungsVon=this.value;renderNoten()"></div>
+        <div class="field"><label>bis</label><input type="date" value="${leistungsBis}" onchange="leistungsBis=this.value;renderNoten()"></div>
+        <span class="hint">${zeitraum.length} Leistung${zeitraum.length===1?'':'en'} im Zeitraum</span>
+      </div>
+      <h3 style="color:var(--navy);margin:18px 0 8px">Leistungsverlauf</h3>
+      ${renderLeistungsDiagramm(zeitraum)}
+      <h3 style="color:var(--navy);margin:20px 0 8px">Einzelnoten im Zeitraum</h3>
+      ${zeitraum.length?`<div style="overflow-x:auto"><table><thead><tr><th>Datum</th><th>Leistung</th><th>Bereich</th><th>Note</th><th>Gewichtung</th></tr></thead><tbody>${zeitraum.map(n=>`<tr><td>${n.datum?formatDatum(n.datum):'—'}</td><td>${esc(n.bezeichnung)}</td><td>${esc((NOTEN_KATEGORIEN.find(k=>k.key===n.kategorie)||{}).label||n.kategorie)}</td><td>${noteBadge(n.wert,n.anzeige)}</td><td>${n.gewicht===undefined?100:n.gewicht} %</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty-state">In diesem Zeitraum sind noch keine Noten vorhanden.</div>'}
     </div>
   `;
 }
 
-function saveNote(schuelerId, kategorie){
-  const bezeichnung = document.getElementById(`note-bez-${kategorie}`).value.trim();
-  const anzeige = document.getElementById(`note-wert-${kategorie}`).value;
-  const wert = tendenzWert(anzeige);
-  const datum = document.getElementById(`note-datum-${kategorie}`).value;
-  const gewichtRaw = document.getElementById(`note-gewicht-${kategorie}`).value;
-  const gewicht = gewichtRaw === '' ? 100 : parseFloat(gewichtRaw);
-  if(!bezeichnung){
-    alert('Bitte eine Bezeichnung angeben.');
-    return;
-  }
-  const vorhanden = notenEditingId ? state.noten.find(n => n.id === notenEditingId && n.schuelerId === schuelerId && n.kategorie === kategorie) : null;
-  if(vorhanden) Object.assign(vorhanden,{bezeichnung,anzeige,wert,datum,gewicht:isNaN(gewicht)?100:gewicht});
-  else state.noten.push({id: uid(), schuelerId, kategorie, bezeichnung, anzeige, wert, datum, gewicht: isNaN(gewicht) ? 100 : gewicht});
-  notenEditingId = null;
-  saveState();
-  renderNoten();
-}
-
-function setNoteGewicht(id, wert){
-  const note = state.noten.find(n => n.id === id);
-  const zahl = parseFloat(wert);
-  note.gewicht = isNaN(zahl) ? 100 : zahl;
-  saveState();
-  renderNoten();
-}
-
-function deleteNote(id){
-  if(!confirm('Note wirklich löschen?')) return;
-  state.noten = state.noten.filter(n => n.id !== id);
-  if(notenEditingId === id) notenEditingId = null;
-  saveState();
-  renderNoten();
+function renderLeistungsDiagramm(noten){
+  const mitDatum=noten.filter(n=>n.datum&&Number.isFinite(Number(n.wert)));
+  if(!mitDatum.length)return '<div class="empty-state">Für das Diagramm werden Leistungen mit Datum benötigt.</div>';
+  const W=900,H=280,left=58,right=22,top=24,bottom=48,breite=W-left-right,hoehe=H-top-bottom;
+  const minZeit=new Date(mitDatum[0].datum+'T00:00').getTime(),maxZeit=new Date(mitDatum[mitDatum.length-1].datum+'T00:00').getTime();
+  const x=(n,i)=>maxZeit===minZeit?left+breite/2:left+(new Date(n.datum+'T00:00').getTime()-minZeit)/(maxZeit-minZeit)*breite;
+  const y=n=>top+((Math.max(.7,Math.min(6.3,Number(n.wert)))-1)/5)*hoehe;
+  const punkte=mitDatum.map((n,i)=>`${x(n,i).toFixed(1)},${y(n).toFixed(1)}`).join(' '),schritt=Math.max(1,Math.ceil(mitDatum.length/6));
+  const raster=[1,2,3,4,5,6].map(n=>`<line class="grid" x1="${left}" y1="${y({wert:n})}" x2="${W-right}" y2="${y({wert:n})}"/><text x="${left-18}" y="${y({wert:n})+4}">${n}</text>`).join('');
+  const marks=mitDatum.map((n,i)=>`<circle class="point point-${n.kategorie}" cx="${x(n,i)}" cy="${y(n)}" r="5"><title>${formatDatum(n.datum)} · ${esc(n.bezeichnung)} · Note ${esc(n.anzeige||n.wert)}</title></circle>${i%schritt===0||i===mitDatum.length-1?`<text text-anchor="middle" x="${x(n,i)}" y="${H-22}">${formatDatum(n.datum).slice(0,6)}</text>`:''}`).join('');
+  return `<div class="noten-chart-wrap"><svg class="noten-chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Kurvendiagramm des Notenverlaufs; Note 1 ist oben und Note 6 unten"><text x="8" y="14">Note</text>${raster}<polyline class="curve" points="${punkte}"/>${marks}<text x="${W/2}" y="${H-4}" text-anchor="middle">Zeitraum</text></svg></div><div class="hint" style="margin-top:8px"><span style="color:#5A9B52">●</span> Klassenarbeit &nbsp; <span style="color:#D5A317">●</span> Lernkontrolle &nbsp; <span style="color:#C78D45">●</span> Mündlich · bessere Noten stehen oben</div>`;
 }
 
 /* ===================== KOMPETENZRASTER ===================== */
