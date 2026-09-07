@@ -3719,7 +3719,7 @@ function formatKomma(zahl, nachkomma){
   return zahl.toFixed(nachkomma).replace('.', ',');
 }
 
-const TENDENZ_NOTEN = ['1+','1','1-','2+','2','2-','3+','3','3-','4+','4','4-','5+','5','5-','6+','6','6-'];
+const TENDENZ_NOTEN = ['1+','1','1-','2+','2','2-','3+','3','3-','4+','4','4-','5+','5','5-','6+','6'];
 
 function tendenzWert(note){
   const match = String(note).match(/^([1-6])([+-]?)$/);
@@ -3728,21 +3728,16 @@ function tendenzWert(note){
   return basis + (match[2] === '+' ? -0.3 : match[2] === '-' ? 0.3 : 0);
 }
 
-function notenSmiley(note){
-  const n = Math.round(tendenzWert(note) || Number(note));
-  return ['','😄','🙂','😐','😕','😟','😞'][n] || '😐';
-}
-
 function notenOptionen(selected, leerErlaubt=true){
   const aktuell = selected == null ? '' : String(selected);
-  return `${leerErlaubt?'<option value="">&mdash;</option>':''}${TENDENZ_NOTEN.map(n=>`<option value="${n}" ${aktuell===n?'selected':''}>${notenSmiley(n)} ${n}</option>`).join('')}`;
+  return `${leerErlaubt?'<option value="">&mdash;</option>':''}${TENDENZ_NOTEN.map(n=>`<option value="${n}" ${aktuell===n?'selected':''}>${n}</option>`).join('')}`;
 }
 
 function noteBadge(val, anzeige){
   if(val === null) return '<span class="hint">—</span>';
   const rounded = Math.round(val);
   const text = anzeige || String(Math.round(val * 10) / 10).replace('.', ',');
-  return `<span class="grade-cell g${Math.max(1,Math.min(6,rounded))}">${notenSmiley(anzeige || val)} ${esc(text)}</span>`;
+  return `<span class="grade-cell g${Math.max(1,Math.min(6,rounded))}">${esc(text)}</span>`;
 }
 
 // Ermittelt je Kategorie die in der Klasse tatsächlich vergebenen Termine (Datum+Bezeichnung),
@@ -3831,7 +3826,7 @@ function renderNotenUebersicht(){
     const zellen = kategorien.map(({kat, spalten}) => {
       const noteZellen = spalten.map(sp => {
         const n = findeNote(s.id, kat.key, sp);
-        return `<td class="noten-kat-${kat.key}-light"><select class="no-print" style="width:82px" aria-label="Note für ${esc(s.nachname)}, ${esc(s.vorname)}" onchange='setTabellenNote(${JSON.stringify(s.id)},${JSON.stringify(kat.key)},${JSON.stringify(sp.id||'')},${JSON.stringify(sp.datum||'')},${JSON.stringify(sp.bezeichnung)},${JSON.stringify(sp.gewicht||100)},this.value)'>${notenOptionen(n?(n.anzeige||String(n.wert)):'')}</select><span class="print-only">${n?`${notenSmiley(n.anzeige||n.wert)} ${esc(n.anzeige||n.wert)}`:''}</span></td>`;
+        return `<td class="noten-kat-${kat.key}-light"><select class="no-print" style="width:82px" aria-label="Note für ${esc(s.nachname)}, ${esc(s.vorname)}" onchange='setTabellenNote(${JSON.stringify(s.id)},${JSON.stringify(kat.key)},${JSON.stringify(sp.id||'')},${JSON.stringify(sp.datum||'')},${JSON.stringify(sp.bezeichnung)},${JSON.stringify(sp.gewicht||100)},this.value)'>${notenOptionen(n?(n.anzeige||String(n.wert)):'')}</select><span class="print-only">${n?esc(n.anzeige||n.wert):''}</span></td>`;
       }).join('');
       const schnitt = schnittFuer(s.id, kat.key);
       return noteZellen + `<td class="noten-kat-${kat.key}-light"><strong>${formatKomma(schnitt, 1)}</strong></td>`;
