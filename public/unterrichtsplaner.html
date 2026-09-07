@@ -403,13 +403,13 @@
   }
   .noten-tabelle .noten-name{ text-align:left; white-space:normal; }
   .noten-tabelle tbody tr:hover td{ background:#FBFAF6; }
-  .noten-kat-lernkontrolle{ background:#BFE1F5; font-weight:700; }
-  .noten-kat-lernkontrolle-light{ background:#E7F3FB; }
+  .noten-kat-lernkontrolle{ background:#FFE07A; font-weight:700; }
+  .noten-kat-lernkontrolle-light{ background:#FFF1B8; }
   .noten-kat-klassenarbeit{ background:#CBEAC7; font-weight:700; }
   .noten-kat-klassenarbeit-light{ background:#EBF7E9; }
-  .noten-kat-mitarbeit{ background:#F3D9C0; font-weight:700; }
-  .noten-kat-mitarbeit-light{ background:#FBEEE2; }
-  .noten-endnote{ font-weight:700; color:var(--rose); font-size:14px; }
+  .noten-kat-mitarbeit{ background:#FFE07A; font-weight:700; }
+  .noten-kat-mitarbeit-light{ background:#FFF1B8; }
+  .noten-endnote{ background:#E2E3DC; font-weight:700; color:var(--rose); font-size:14px; }
 
   .kr-cell{
     text-align:center;
@@ -1574,12 +1574,12 @@ const XLSX_STYLES_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <fills count="8">
 <fill><patternFill patternType="none"/></fill>
 <fill><patternFill patternType="gray125"/></fill>
-<fill><patternFill patternType="solid"><fgColor rgb="FFBFE1F5"/><bgColor indexed="64"/></patternFill></fill>
-<fill><patternFill patternType="solid"><fgColor rgb="FFE7F3FB"/><bgColor indexed="64"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFFFE07A"/><bgColor indexed="64"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFFFF1B8"/><bgColor indexed="64"/></patternFill></fill>
 <fill><patternFill patternType="solid"><fgColor rgb="FFCBEAC7"/><bgColor indexed="64"/></patternFill></fill>
 <fill><patternFill patternType="solid"><fgColor rgb="FFEBF7E9"/><bgColor indexed="64"/></patternFill></fill>
-<fill><patternFill patternType="solid"><fgColor rgb="FFF3D9C0"/><bgColor indexed="64"/></patternFill></fill>
-<fill><patternFill patternType="solid"><fgColor rgb="FFFBEEE2"/><bgColor indexed="64"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFFFE07A"/><bgColor indexed="64"/></patternFill></fill>
+<fill><patternFill patternType="solid"><fgColor rgb="FFFFF1B8"/><bgColor indexed="64"/></patternFill></fill>
 </fills>
 <borders count="2">
 <border><left/><right/><top/><bottom/><diagonal/></border>
@@ -1663,49 +1663,17 @@ function exportNotenExcel(){
   const XS = NOTEN_XLSX_STYLE;
   const kategorien = NOTEN_KATEGORIEN.map(kat => ({kat, spalten: notenSpaltenFuerKategorie(notenKlasseId, kat.key)}));
   const gewichtung = gewichtungFuerKlasse(notenKlasseId);
-
-  let col = 1; // Spalte 0 = Name
-  const catRanges = [];
-  kategorien.forEach(({kat, spalten}) => {
-    const colStart = col;
-    col += spalten.length;
-    const oCol = col;
-    col += 1;
-    catRanges.push({kat, spalten, colStart, oCol, colEnd: col - 1});
-  });
-  const endnoteCol = col;
-  const totalCols = col + 1;
-  const merges = [];
-
-  const zeile1 = new Array(totalCols).fill(null);
-  zeile1[0] = {text: 'Name, Vorname', style: XS.nameHeader};
-  merges.push(xlsxMergeRef(0, 0, 0, 2));
-  catRanges.forEach(cr => {
-    const stil = XS.cat[cr.kat.key];
-    zeile1[cr.colStart] = {text: `${cr.kat.label} (${formatProzent(gewichtung[cr.kat.key] || 0)} %)`, style: stil.header};
-    for(let c = cr.colStart; c <= cr.oCol; c++){ if(c !== cr.colStart) zeile1[c] = {text: '', style: stil.header}; }
-    merges.push(xlsxMergeRef(cr.colStart, 0, cr.oCol, 0));
-  });
-  zeile1[endnoteCol] = {text: 'Endnote', style: XS.nameHeader};
-  merges.push(xlsxMergeRef(endnoteCol, 0, endnoteCol, 2));
-
-  const zeile2 = new Array(totalCols).fill(null);
-  zeile2[0] = {text: '', style: XS.nameHeader};
-  zeile2[endnoteCol] = {text: '', style: XS.nameHeader};
-  catRanges.forEach(cr => {
-    const stil = XS.cat[cr.kat.key];
-    cr.spalten.forEach((sp, i) => { zeile2[cr.colStart + i] = {text: sp.datum ? formatDatum(sp.datum) : '—', style: stil.sub}; });
-    zeile2[cr.oCol] = {text: 'Ø', style: stil.sub};
-    merges.push(xlsxMergeRef(cr.oCol, 1, cr.oCol, 2));
-  });
-
-  const zeile3 = new Array(totalCols).fill(null);
-  zeile3[0] = {text: '', style: XS.nameHeader};
-  zeile3[endnoteCol] = {text: '', style: XS.nameHeader};
-  catRanges.forEach(cr => {
-    const stil = XS.cat[cr.kat.key];
-    cr.spalten.forEach((sp, i) => { zeile3[cr.colStart + i] = {text: sp.bezeichnung, style: stil.sub}; });
-  });
+  let col=1;const catRanges=[];
+  kategorien.forEach(({kat,spalten})=>{const colStart=col;col+=spalten.length;const oCol=col++;catRanges.push({kat,spalten,colStart,oCol});});
+  const allgemeinCol=col++,endnoteCol=col++,totalCols=col,merges=[];
+  const zeilen=[0,1,2].map(()=>new Array(totalCols).fill(null));
+  zeilen[0][0]={text:'Name, Vorname',style:XS.nameHeader};merges.push(xlsxMergeRef(0,0,0,2));
+  const schrift=catRanges.find(r=>r.kat.key==='klassenarbeit'),lern=catRanges.find(r=>r.kat.key==='lernkontrolle'),muendl=catRanges.find(r=>r.kat.key==='mitarbeit');
+  zeilen[0][schrift.colStart]={text:`Schriftlicher Teil (${formatProzent(gewichtung.schriftlich)} %)`,style:XS.cat.klassenarbeit.header};merges.push(xlsxMergeRef(schrift.colStart,0,schrift.oCol,0));
+  zeilen[0][lern.colStart]={text:`Allgemeiner Teil (${formatProzent(gewichtung.allgemein)} %)`,style:XS.cat.mitarbeit.header};merges.push(xlsxMergeRef(lern.colStart,0,allgemeinCol,0));
+  zeilen[0][endnoteCol]={text:'Endnote',style:XS.endnoteData};merges.push(xlsxMergeRef(endnoteCol,0,endnoteCol,2));
+  catRanges.forEach(cr=>{const stil=XS.cat[cr.kat.key];zeilen[1][cr.colStart]={text:cr.kat.label,style:stil.header};merges.push(xlsxMergeRef(cr.colStart,1,cr.oCol,1));cr.spalten.forEach((sp,i)=>{zeilen[2][cr.colStart+i]={text:`${sp.datum?formatDatum(sp.datum):'—'}\n${sp.bezeichnung}`,style:stil.sub};});zeilen[2][cr.oCol]={text:'Ø',style:stil.sub};});
+  zeilen[1][allgemeinCol]={text:'Endnote Allgemeiner Teil',style:XS.cat.mitarbeit.header};merges.push(xlsxMergeRef(allgemeinCol,1,allgemeinCol,2));
 
   const datenZeilen = liste.map(s => {
     const zeile = new Array(totalCols).fill(null);
@@ -1714,17 +1682,19 @@ function exportNotenExcel(){
       const stil = XS.cat[cr.kat.key];
       cr.spalten.forEach((sp, i) => {
         const n = findeNote(s.id, cr.kat.key, sp);
-        zeile[cr.colStart + i] = n ? {value: n.wert, style: stil.data} : {text: '', style: stil.data};
+        zeile[cr.colStart + i] = n ? {text: n.anzeige||String(n.wert).replace('.',','), style: stil.data} : {text: '', style: stil.data};
       });
       const schnitt = schnittFuer(s.id, cr.kat.key);
       zeile[cr.oCol] = schnitt !== null ? {value: Math.round(schnitt * 10) / 10, style: stil.sub} : {text: '—', style: stil.sub};
     });
+    const allgemein=allgemeinerSchnittFuer(s.id);
+    zeile[allgemeinCol]=allgemein!==null?{value:Math.round(allgemein*100)/100,style:XS.cat.mitarbeit.sub}:{text:'—',style:XS.cat.mitarbeit.sub};
     const end = endnoteFuer(s.id);
     zeile[endnoteCol] = end !== null ? {value: Math.round(end * 100) / 100, style: XS.endnoteData} : {text: '—', style: XS.endnoteData};
     return zeile;
   });
 
-  const alleZeilen = [zeile1, zeile2, zeile3, ...datenZeilen];
+  const alleZeilen = [...zeilen, ...datenZeilen];
   const sheetXml = buildXlsxSheetXml(alleZeilen, merges, totalCols);
   const dateiname = `Notenübersicht - ${klasseName(notenKlasseId)}.xlsx`.replace(/[\\/:*?"<>|]/g, '_');
   baueUndLadeXlsx(dateiname, sheetXml);
@@ -3589,9 +3559,9 @@ let notenSchuelerId = null;
 let notenEditingId = null;
 
 const NOTEN_KATEGORIEN = [
-  {key:'lernkontrolle', label:'Lernkontrolle'},
   {key:'klassenarbeit', label:'Klassenarbeiten'},
-  {key:'mitarbeit', label:'Allgemeiner Teil'}
+  {key:'lernkontrolle', label:'Lernkontrolle'},
+  {key:'mitarbeit', label:'Mündlich'}
 ];
 
 function renderNoten(){
@@ -3634,8 +3604,9 @@ function renderNotenSchuelerAuswahl(){
 
 function gewichtungFuerKlasse(klasseId){
   const g = state.notenGewichtung[klasseId];
-  if(g) return g;
-  return {lernkontrolle: 100/3, klassenarbeit: 100/3, mitarbeit: 100/3};
+  const standard = {schriftlich:50, allgemein:50, lernkontrolle:50, mitarbeit:50};
+  if(g && (g.schriftlich !== undefined || g.allgemein !== undefined)) return Object.assign(standard, g);
+  return standard;
 }
 
 function formatProzent(zahl){
@@ -3655,22 +3626,21 @@ function setGewichtung(kategorie, wert){
 
 function renderGewichtungCard(){
   const gew = gewichtungFuerKlasse(notenKlasseId);
-  const summe = NOTEN_KATEGORIEN.reduce((a,k) => a + (gew[k.key] || 0), 0);
-  const summeGerundet = Math.round(summe * 10) / 10;
-  const stimmt = Math.abs(summe - 100) < 0.05;
+  const hauptSumme = (gew.schriftlich||0) + (gew.allgemein||0);
+  const allgemeinSumme = (gew.lernkontrolle||0) + (gew.mitarbeit||0);
+  const stimmt = Math.abs(hauptSumme-100)<0.05 && Math.abs(allgemeinSumme-100)<0.05;
   return `
     <div class="card no-print">
-      <h2>Gewichtung der Kategorien — ${esc(klasseName(notenKlasseId))}</h2>
-      <p class="hint">Bestimmt, wie stark jede Kategorie in die Endnote einfließt. Die drei Werte sollten in Summe 100 % ergeben.</p>
+      <h2>Berechnung und Gewichtung — ${esc(klasseName(notenKlasseId))}</h2>
+      <p class="hint">Die Gesamtnote besteht aus dem schriftlichen und dem allgemeinen Teil. Innerhalb des allgemeinen Teils werden Lernkontrollen und mündliche Leistungen gewichtet.</p>
       <div class="field-row" style="margin-bottom:8px;">
-        ${NOTEN_KATEGORIEN.map(k => `
-          <div class="field" style="max-width:170px;">
-            <label>${esc(k.label)} (%)</label>
-            <input type="number" min="0" max="100" step="1" value="${gew[k.key]}" onchange="setGewichtung('${k.key}', this.value)">
-          </div>`).join('')}
+        <div class="field" style="max-width:190px"><label>Schriftlicher Teil (%)</label><input type="number" min="0" max="100" value="${gew.schriftlich}" onchange="setGewichtung('schriftlich',this.value)"></div>
+        <div class="field" style="max-width:190px"><label>Allgemeiner Teil (%)</label><input type="number" min="0" max="100" value="${gew.allgemein}" onchange="setGewichtung('allgemein',this.value)"></div>
+        <div class="field" style="max-width:190px"><label>Lernkontrolle darin (%)</label><input type="number" min="0" max="100" value="${gew.lernkontrolle}" onchange="setGewichtung('lernkontrolle',this.value)"></div>
+        <div class="field" style="max-width:190px"><label>Mündlich darin (%)</label><input type="number" min="0" max="100" value="${gew.mitarbeit}" onchange="setGewichtung('mitarbeit',this.value)"></div>
       </div>
       <p class="hint" style="color:${stimmt ? 'var(--teal)' : 'var(--rose)'}; font-weight:600;">
-        Summe: ${formatProzent(summeGerundet)} % ${stimmt ? '✓' : '— sollte 100 % ergeben'}
+        Hauptteile: ${formatProzent(hauptSumme)} % · Allgemeiner Teil: ${formatProzent(allgemeinSumme)} % ${stimmt ? '✓' : '— beide Summen sollten 100 % ergeben'}
       </p>
     </div>
   `;
@@ -3696,22 +3666,30 @@ function gesamtSchnitt(schuelerId){
   return alle.reduce((a,b) => a+b, 0) / alle.length;
 }
 
-// Endnote = gewichteter Durchschnitt der Kategorie-Schnitte gemäß der eingestellten Gewichtung.
-// Kategorien ohne Noten fließen nicht ein; die übrigen Gewichte werden dabei automatisch anteilig genutzt.
-function endnoteFuer(schuelerId){
+function allgemeinerSchnittFuer(schuelerId){
   const gew = gewichtungFuerKlasse(notenKlasseId);
+  const teile=[['lernkontrolle',gew.lernkontrolle],['mitarbeit',gew.mitarbeit]];
   let summeGewicht = 0;
   let summeProdukt = 0;
-  NOTEN_KATEGORIEN.forEach(k => {
-    const schnitt = schnittFuer(schuelerId, k.key);
+  teile.forEach(([k,w]) => {
+    const schnitt = schnittFuer(schuelerId, k);
     if(schnitt !== null){
-      const w = gew[k.key] || 0;
-      summeGewicht += w;
-      summeProdukt += schnitt * w;
+      summeGewicht += w || 0;
+      summeProdukt += schnitt * (w || 0);
     }
   });
   if(summeGewicht === 0) return null;
   return summeProdukt / summeGewicht;
+}
+
+// Gesamtnote = schriftlicher Teil und allgemeiner Teil gemäß der eingestellten Gewichtung.
+// Fehlt ein Teil noch, wird der vorhandene Teil angezeigt, ohne ihn künstlich zu verschlechtern.
+function endnoteFuer(schuelerId){
+  const gew=gewichtungFuerKlasse(notenKlasseId),schriftlich=schnittFuer(schuelerId,'klassenarbeit'),allgemein=allgemeinerSchnittFuer(schuelerId);
+  let summe=0,gewicht=0;
+  if(schriftlich!==null){summe+=schriftlich*(gew.schriftlich||0);gewicht+=gew.schriftlich||0;}
+  if(allgemein!==null){summe+=allgemein*(gew.allgemein||0);gewicht+=gew.allgemein||0;}
+  return gewicht?summe/gewicht:null;
 }
 
 function formatKomma(zahl, nachkomma){
@@ -3799,29 +3777,16 @@ function renderNotenUebersicht(){
     return `<div class="card"><div class="toolbar"><h2 style="margin:0;">Notenübersicht — ${esc(klasseName(notenKlasseId))}</h2></div><div class="empty-state">Keine Schüler:innen in dieser Klasse.</div></div>`;
   }
 
-  const kategorien = NOTEN_KATEGORIEN.map(kat => ({
-    kat,
-    spalten: notenSpaltenFuerKategorie(notenKlasseId, kat.key)
-  }));
-
+  const schriftlich = {kat:NOTEN_KATEGORIEN.find(k=>k.key==='klassenarbeit'),spalten:notenSpaltenFuerKategorie(notenKlasseId,'klassenarbeit')};
+  const lernkontrolle = {kat:NOTEN_KATEGORIEN.find(k=>k.key==='lernkontrolle'),spalten:notenSpaltenFuerKategorie(notenKlasseId,'lernkontrolle')};
+  const muendlich = {kat:NOTEN_KATEGORIEN.find(k=>k.key==='mitarbeit'),spalten:notenSpaltenFuerKategorie(notenKlasseId,'mitarbeit')};
+  const kategorien=[schriftlich,lernkontrolle,muendlich];
   const gewichtung = gewichtungFuerKlasse(notenKlasseId);
-
-  const headerZeile1 = kategorien.map(({kat, spalten}) =>
-    `<th colspan="${spalten.length + 1}" class="noten-kat-${kat.key}">${esc(kat.label)} <span style="font-weight:400;">(${formatProzent(gewichtung[kat.key] || 0)} %)</span></th>`
-  ).join('');
-
-  const headerZeile2 = kategorien.map(({kat, spalten}) =>
-    spalten.map(sp => `<th class="noten-kat-${kat.key}-light">${sp.datum ? formatDatum(sp.datum) : '—'}</th>`).join('') +
-    `<th rowspan="2" class="noten-kat-${kat.key}-light">Ø</th>`
-  ).join('');
-
-  const headerZeile3 = kategorien.map(({kat, spalten}) =>
-    spalten.map(sp => `<th class="noten-kat-${kat.key}-light">
-      <span>${esc(sp.bezeichnung)}</span>
+  const spaltenHeader = ({kat,spalten}) => spalten.map(sp => `<th class="noten-kat-${kat.key}-light">
+      <small>${sp.datum ? formatDatum(sp.datum) : '—'}</small><br><span>${esc(sp.bezeichnung)}</span>
       <button class="icon-btn no-print" style="padding:0 0 0 4px;" onclick='deleteNotenSpalte(${JSON.stringify(kat.key)}, ${JSON.stringify(sp.datum)}, ${JSON.stringify(sp.bezeichnung)}, ${JSON.stringify(sp.id||'')})' title="Diese Spalte für die ganze Klasse löschen">✕</button>
-    </th>`).join('')
-  ).join('');
-
+    </th>`).join('');
+  const durchschnittHeader = ({kat})=>`<th class="noten-kat-${kat.key}-light">Ø</th>`;
   const rows = liste.map(s => {
     const zellen = kategorien.map(({kat, spalten}) => {
       const noteZellen = spalten.map(sp => {
@@ -3831,10 +3796,12 @@ function renderNotenUebersicht(){
       const schnitt = schnittFuer(s.id, kat.key);
       return noteZellen + `<td class="noten-kat-${kat.key}-light"><strong>${formatKomma(schnitt, 1)}</strong></td>`;
     }).join('');
+    const allgemein = allgemeinerSchnittFuer(s.id);
     const endnote = endnoteFuer(s.id);
     return `<tr>
       <td class="noten-name">${esc(s.nachname)}, ${esc(s.vorname)}</td>
       ${zellen}
+      <td class="noten-kat-mitarbeit"><strong>${formatKomma(allgemein, 2)}</strong></td>
       <td class="noten-endnote">${formatKomma(endnote, 2)}</td>
       <td class="no-print"><button class="btn btn-sm btn-outline" onclick="notenSchuelerId='${s.id}'; renderNoten();">Noten verwalten</button></td>
     </tr>`;
@@ -3857,12 +3824,12 @@ function renderNotenUebersicht(){
         <thead>
           <tr>
             <th rowspan="3" class="noten-name">Name, Vorname</th>
-            ${headerZeile1}
-            <th rowspan="3">Endnote</th>
-            <th rowspan="3" class="no-print"></th>
+            <th colspan="${schriftlich.spalten.length+1}" class="noten-kat-klassenarbeit">Schriftlicher Teil (${formatProzent(gewichtung.schriftlich)} %)</th>
+            <th colspan="${lernkontrolle.spalten.length+muendlich.spalten.length+3}" class="noten-kat-mitarbeit">Allgemeiner Teil (${formatProzent(gewichtung.allgemein)} %)</th>
+            <th rowspan="3" class="noten-endnote">Endnote</th><th rowspan="3" class="no-print"></th>
           </tr>
-          <tr>${headerZeile2}</tr>
-          <tr>${headerZeile3}</tr>
+          <tr><th colspan="${schriftlich.spalten.length+1}" class="noten-kat-klassenarbeit">Klassenarbeiten</th><th colspan="${lernkontrolle.spalten.length+1}" class="noten-kat-lernkontrolle">Lernkontrolle</th><th colspan="${muendlich.spalten.length+1}" class="noten-kat-mitarbeit">Mündlich</th><th rowspan="2" class="noten-kat-mitarbeit">Endnote<br>Allgemeiner Teil</th></tr>
+          <tr>${spaltenHeader(schriftlich)}${durchschnittHeader(schriftlich)}${spaltenHeader(lernkontrolle)}${durchschnittHeader(lernkontrolle)}${spaltenHeader(muendlich)}${durchschnittHeader(muendlich)}</tr>
         </thead>
         <tbody>${rows}</tbody>
       </table>
