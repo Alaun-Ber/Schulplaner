@@ -983,6 +983,7 @@ function defaultState(){
     abwesenheiten: [],
     stoff: [],
     noten: [],
+    notenSpalten: [],
     kompetenzraster: [],
     kannlisten: [],
     klassenlisten: [],
@@ -3308,6 +3309,7 @@ function deleteKlasse(id){
   const schuelerIds = state.schueler.filter(s => s.klasseId === id).map(s => s.id);
   state.schueler = state.schueler.filter(s => s.klasseId !== id);
   state.noten = state.noten.filter(n => !schuelerIds.includes(n.schuelerId));
+  state.notenSpalten = state.notenSpalten.filter(s => s.klasseId !== id);
   state.abwesenheiten = state.abwesenheiten.filter(a => !schuelerIds.includes(a.schuelerId));
   state.stoff = state.stoff.filter(s => s.klasseId !== id);
   state.kompetenzraster = state.kompetenzraster.filter(r => r.klasseId !== id);
@@ -3717,10 +3719,30 @@ function formatKomma(zahl, nachkomma){
   return zahl.toFixed(nachkomma).replace('.', ',');
 }
 
-function noteBadge(val){
+const TENDENZ_NOTEN = ['1+','1','1-','2+','2','2-','3+','3','3-','4+','4','4-','5+','5','5-','6+','6','6-'];
+
+function tendenzWert(note){
+  const match = String(note).match(/^([1-6])([+-]?)$/);
+  if(!match) return null;
+  const basis = Number(match[1]);
+  return basis + (match[2] === '+' ? -0.3 : match[2] === '-' ? 0.3 : 0);
+}
+
+function notenSmiley(note){
+  const n = Math.round(tendenzWert(note) || Number(note));
+  return ['','😄','🙂','😐','😕','😟','😞'][n] || '😐';
+}
+
+function notenOptionen(selected, leerErlaubt=true){
+  const aktuell = selected == null ? '' : String(selected);
+  return `${leerErlaubt?'<option value="">&mdash;</option>':''}${TENDENZ_NOTEN.map(n=>`<option value="${n}" ${aktuell===n?'selected':''}>${notenSmiley(n)} ${n}</option>`).join('')}`;
+}
+
+function noteBadge(val, anzeige){
   if(val === null) return '<span class="hint">—</span>';
   const rounded = Math.round(val);
-  return `<span class="grade-cell g${rounded}">${val.toFixed(1)}</span>`;
+  const text = anzeige || String(Math.round(val * 10) / 10).replace('.', ',');
+  return `<span class="grade-cell g${Math.max(1,Math.min(6,rounded))}">${notenSmiley(anzeige || val)} ${esc(text)}</span>`;
 }
 
 // Ermittelt je Kategorie die in der Klasse tatsächlich vergebenen Termine (Datum+Bezeichnung),
@@ -3729,9 +3751,12 @@ function notenSpaltenFuerKategorie(klasseId, kategorie){
   const schuelerIds = new Set(schuelerOfKlasse(klasseId).map(s => s.id));
   const eintraege = state.noten.filter(n => schuelerIds.has(n.schuelerId) && n.kategorie === kategorie);
   const map = new Map();
+  (state.notenSpalten || []).filter(s => s.klasseId === klasseId && s.kategorie === kategorie).forEach(s => {
+    map.set(s.id, {id:s.id, datum:s.datum, bezeichnung:s.bezeichnung, gewicht:s.gewicht});
+  });
   eintraege.forEach(n => {
-    const key = (n.datum || '') + '|' + n.bezeichnung;
-    if(!map.has(key)) map.set(key, {datum: n.datum, bezeichnung: n.bezeichnung});
+    const key = n.spalteId || ((n.datum || '') + '|' + n.bezeichnung);
+    if(!map.has(key)) map.set(key, {id:n.spalteId||'', datum: n.datum, bezeichnung: n.bezeichnung, gewicht:n.gewicht});
   });
   return Array.from(map.values()).sort((a,b) =>
     (a.datum || '').localeCompare(b.datum || '') || a.bezeichnung.localeCompare(b.bezeichnung, 'de')
@@ -3740,17 +3765,36 @@ function notenSpaltenFuerKategorie(klasseId, kategorie){
 
 function findeNote(schuelerId, kategorie, spalte){
   return state.noten.find(n => n.schuelerId === schuelerId && n.kategorie === kategorie
-    && n.datum === spalte.datum && n.bezeichnung === spalte.bezeichnung);
+    && (spalte.id ? n.spalteId === spalte.id : n.datum === spalte.datum && n.bezeichnung === spalte.bezeichnung));
 }
 
-function deleteNotenSpalte(kategorie, datum, bezeichnung){
+function deleteNotenSpalte(kategorie, datum, bezeichnung, spalteId){
   if(!confirm(`Alle Einträge zu „${bezeichnung}" wirklich für die gesamte Klasse löschen?`)) return;
   const schuelerIds = new Set(schuelerOfKlasse(notenKlasseId).map(s => s.id));
   state.noten = state.noten.filter(n => !(
-    schuelerIds.has(n.schuelerId) && n.kategorie === kategorie && n.datum === datum && n.bezeichnung === bezeichnung
+    schuelerIds.has(n.schuelerId) && n.kategorie === kategorie && (spalteId ? n.spalteId === spalteId : n.datum === datum && n.bezeichnung === bezeichnung)
   ));
+  if(spalteId) state.notenSpalten = state.notenSpalten.filter(s => s.id !== spalteId);
   saveState();
   renderNoten();
+}
+
+function addNotenSpalte(kategorie){
+  const bezEl=document.getElementById(`spalte-bez-${kategorie}`),datumEl=document.getElementById(`spalte-datum-${kategorie}`),gewichtEl=document.getElementById(`spalte-gewicht-${kategorie}`);
+  const bezeichnung=bezEl.value.trim(),datum=datumEl.value,gewicht=parseFloat(gewichtEl.value);
+  if(!bezeichnung || !datum){alert('Bitte Bezeichnung und Datum angeben.');return;}
+  state.notenSpalten.push({id:uid(),klasseId:notenKlasseId,kategorie,bezeichnung,datum,gewicht:isNaN(gewicht)?100:gewicht});
+  saveState();renderNoten();
+}
+
+function setTabellenNote(schuelerId,kategorie,spalteId,datum,bezeichnung,gewicht,anzeige){
+  const spalte={id:spalteId||'',datum,bezeichnung};
+  const vorhanden=findeNote(schuelerId,kategorie,spalte);
+  if(!anzeige){if(vorhanden)state.noten=state.noten.filter(n=>n.id!==vorhanden.id);saveState();renderNoten();return;}
+  const wert=tendenzWert(anzeige);
+  if(vorhanden)Object.assign(vorhanden,{anzeige,wert,gewicht:Number(gewicht)||100,spalteId:spalteId||vorhanden.spalteId});
+  else state.noten.push({id:uid(),schuelerId,kategorie,spalteId:spalteId||undefined,bezeichnung,datum,anzeige,wert,gewicht:Number(gewicht)||100});
+  saveState();renderNoten();
 }
 
 function renderNotenUebersicht(){
@@ -3779,7 +3823,7 @@ function renderNotenUebersicht(){
   const headerZeile3 = kategorien.map(({kat, spalten}) =>
     spalten.map(sp => `<th class="noten-kat-${kat.key}-light">
       <span>${esc(sp.bezeichnung)}</span>
-      <button class="icon-btn no-print" style="padding:0 0 0 4px;" onclick='deleteNotenSpalte(${JSON.stringify(kat.key)}, ${JSON.stringify(sp.datum)}, ${JSON.stringify(sp.bezeichnung)})' title="Diese Spalte für die ganze Klasse löschen">✕</button>
+      <button class="icon-btn no-print" style="padding:0 0 0 4px;" onclick='deleteNotenSpalte(${JSON.stringify(kat.key)}, ${JSON.stringify(sp.datum)}, ${JSON.stringify(sp.bezeichnung)}, ${JSON.stringify(sp.id||'')})' title="Diese Spalte für die ganze Klasse löschen">✕</button>
     </th>`).join('')
   ).join('');
 
@@ -3787,7 +3831,7 @@ function renderNotenUebersicht(){
     const zellen = kategorien.map(({kat, spalten}) => {
       const noteZellen = spalten.map(sp => {
         const n = findeNote(s.id, kat.key, sp);
-        return `<td class="noten-kat-${kat.key}-light">${n ? `<button class="icon-btn no-print" onclick="notenSchuelerId='${s.id}';notenEditingId='${n.id}';renderNoten()" title="Note bearbeiten">${n.wert} ✎</button><span class="print-only">${n.wert}</span>` : ''}</td>`;
+        return `<td class="noten-kat-${kat.key}-light"><select class="no-print" style="width:82px" aria-label="Note für ${esc(s.nachname)}, ${esc(s.vorname)}" onchange='setTabellenNote(${JSON.stringify(s.id)},${JSON.stringify(kat.key)},${JSON.stringify(sp.id||'')},${JSON.stringify(sp.datum||'')},${JSON.stringify(sp.bezeichnung)},${JSON.stringify(sp.gewicht||100)},this.value)'>${notenOptionen(n?(n.anzeige||String(n.wert)):'')}</select><span class="print-only">${n?`${notenSmiley(n.anzeige||n.wert)} ${esc(n.anzeige||n.wert)}`:''}</span></td>`;
       }).join('');
       const schnitt = schnittFuer(s.id, kat.key);
       return noteZellen + `<td class="noten-kat-${kat.key}-light"><strong>${formatKomma(schnitt, 1)}</strong></td>`;
@@ -3809,6 +3853,9 @@ function renderNotenUebersicht(){
           <button class="btn btn-outline no-print" onclick="exportNotenExcel()">⬇ Excel-Export</button>
           <button class="btn btn-gold no-print" onclick="window.print()">⎙ Drucken</button>
         </div>
+      </div>
+      <div class="no-print" style="display:grid;grid-template-columns:repeat(3,minmax(230px,1fr));gap:10px;margin:14px 0;">
+        ${NOTEN_KATEGORIEN.map(kat=>`<div style="border:1px solid var(--line);border-radius:10px;padding:12px;background:var(--paper);"><strong>${esc(kat.label)}: neue Spalte</strong><div class="field" style="margin-top:8px"><label>Bezeichnung</label><input id="spalte-bez-${kat.key}" placeholder="z. B. Mitarbeit (mündlich)"></div><div class="field-row" style="margin:8px 0 0"><div class="field"><label>Datum</label><input type="date" id="spalte-datum-${kat.key}" value="${todayISO()}"></div><div class="field" style="max-width:95px"><label>Gewicht %</label><input type="number" id="spalte-gewicht-${kat.key}" min="0" value="100"></div><button class="btn btn-outline" onclick="addNotenSpalte('${kat.key}')">+ Spalte</button></div></div>`).join('')}
       </div>
       <div style="overflow-x:auto;">
       <table class="noten-tabelle">
@@ -3855,7 +3902,7 @@ function renderNotenKategorie(schuelerId, kat){
             <tr>
               <td>${esc(n.bezeichnung)}</td>
               <td>${n.datum ? formatDatum(n.datum) : '—'}</td>
-              <td>${noteBadge(n.wert)}</td>
+              <td>${noteBadge(n.wert,n.anzeige)}</td>
               <td>
                 <input type="number" min="0" step="1" value="${n.gewicht === undefined || n.gewicht === null ? 100 : n.gewicht}" style="width:70px;" onchange="setNoteGewicht('${n.id}', this.value)"> %
               </td>
@@ -3872,7 +3919,7 @@ function renderNotenKategorie(schuelerId, kat){
         <div class="field" style="max-width:100px;">
           <label>Note</label>
           <select id="note-wert-${kat.key}">
-            ${[1,2,3,4,5,6].map(n => `<option value="${n}" ${editing&&Number(editing.wert)===n?'selected':''}>${n}</option>`).join('')}
+            ${notenOptionen(editing?(editing.anzeige||String(editing.wert)):'1',false)}
           </select>
         </div>
         <div class="field" style="max-width:150px;">
@@ -3892,7 +3939,8 @@ function renderNotenKategorie(schuelerId, kat){
 
 function saveNote(schuelerId, kategorie){
   const bezeichnung = document.getElementById(`note-bez-${kategorie}`).value.trim();
-  const wert = parseFloat(document.getElementById(`note-wert-${kategorie}`).value);
+  const anzeige = document.getElementById(`note-wert-${kategorie}`).value;
+  const wert = tendenzWert(anzeige);
   const datum = document.getElementById(`note-datum-${kategorie}`).value;
   const gewichtRaw = document.getElementById(`note-gewicht-${kategorie}`).value;
   const gewicht = gewichtRaw === '' ? 100 : parseFloat(gewichtRaw);
@@ -3901,8 +3949,8 @@ function saveNote(schuelerId, kategorie){
     return;
   }
   const vorhanden = notenEditingId ? state.noten.find(n => n.id === notenEditingId && n.schuelerId === schuelerId && n.kategorie === kategorie) : null;
-  if(vorhanden) Object.assign(vorhanden,{bezeichnung,wert,datum,gewicht:isNaN(gewicht)?100:gewicht});
-  else state.noten.push({id: uid(), schuelerId, kategorie, bezeichnung, wert, datum, gewicht: isNaN(gewicht) ? 100 : gewicht});
+  if(vorhanden) Object.assign(vorhanden,{bezeichnung,anzeige,wert,datum,gewicht:isNaN(gewicht)?100:gewicht});
+  else state.noten.push({id: uid(), schuelerId, kategorie, bezeichnung, anzeige, wert, datum, gewicht: isNaN(gewicht) ? 100 : gewicht});
   notenEditingId = null;
   saveState();
   renderNoten();
