@@ -8,7 +8,11 @@ export default defineConfig({
     registerType: 'autoUpdate',
     includeAssets: ['icon.svg'],
     manifest: { name: 'Schulplaner', short_name: 'Schulplaner', description: 'Lokaler Schulplaner für die Schulleitung', theme_color: '#173f3a', background_color: '#f5f5f0', display: 'standalone', start_url: '.', icons: [{ src: 'icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }] },
-    workbox: { navigateFallback: 'index.html', globPatterns: ['**/*.{js,css,html,svg}'] },
+    workbox: {
+      navigateFallback: 'index.html',
+      globPatterns: ['**/*.{js,css,html,svg}'],
+      ignoreURLParametersMatching: [/^utm_/, /^fbclid$/, /^tab$/]
+    },
     devOptions: { enabled: true }
   })],
   test: { environment: 'jsdom', setupFiles: './src/test/setup.ts', globals: true }
