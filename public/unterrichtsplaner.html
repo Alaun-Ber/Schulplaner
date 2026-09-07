@@ -410,15 +410,16 @@
   .noten-kat-mitarbeit{ background:#FFE07A; font-weight:700; }
   .noten-kat-mitarbeit-light{ background:#FFF1B8; }
   .noten-endnote{ background:#E2E3DC; font-weight:700; color:var(--rose); font-size:14px; }
-  .noten-summary{display:grid;grid-template-columns:repeat(4,minmax(140px,1fr));gap:10px;margin:12px 0 18px}
-  .noten-summary>div{padding:14px;border:1px solid var(--line);border-radius:10px;background:#fff}
-  .noten-summary strong{display:block;font-size:23px;color:var(--navy);margin-top:4px}
+  .noten-summary{display:grid;grid-template-columns:repeat(5,minmax(120px,1fr));gap:8px;margin:10px 0 14px}
+  .noten-summary>div{min-height:58px;padding:9px 11px;border:1px solid var(--line);border-radius:8px;background:#fff;font-size:12px;display:flex;flex-direction:column;justify-content:center}
+  .noten-summary strong{display:block;font-size:18px;line-height:1.1;color:var(--navy);margin-top:3px}
   .noten-chart{width:100%;min-width:620px;height:auto;display:block}
   .noten-chart-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:#fff;padding:8px}
   .noten-chart text{font-family:var(--font-body);font-size:11px;fill:var(--ink-soft)}
   .noten-chart .grid{stroke:var(--line);stroke-width:1}.noten-chart .curve{fill:none;stroke:var(--navy-light);stroke-width:3;stroke-linejoin:round;stroke-linecap:round}
   .noten-chart .point{stroke:#fff;stroke-width:2}.noten-chart .point-klassenarbeit{fill:#5A9B52}.noten-chart .point-lernkontrolle{fill:#D5A317}.noten-chart .point-mitarbeit{fill:#C78D45}
-  @media(max-width:700px){.noten-summary{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:1100px){.noten-summary{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:700px){.noten-summary{grid-template-columns:repeat(2,1fr)}.noten-summary>div{min-height:52px;padding:8px 10px}}
 
   .kr-cell{
     text-align:center;
@@ -3865,7 +3866,7 @@ function renderNotenDetail(){
         <div>Lernkontrollen<strong>${formatKomma(lern,2)}</strong></div>
         <div>Mündlich<strong>${formatKomma(muendlich,2)}</strong></div>
         <div>Allgemeiner Teil<strong>${formatKomma(allgemein,2)}</strong></div>
-        <div style="grid-column:1/-1;background:var(--teal-light)">Gesamtnote<strong>${formatKomma(gesamt,2)}</strong></div>
+        <div style="background:var(--teal-light)">Gesamtnote<strong>${formatKomma(gesamt,2)}</strong></div>
       </div>
       <div class="field-row" style="align-items:end">
         <div class="field"><label>Leistungsverlauf von</label><input type="date" value="${leistungsVon}" onchange="leistungsVon=this.value;renderNoten()"></div>
