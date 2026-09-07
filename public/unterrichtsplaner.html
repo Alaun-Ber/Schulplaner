@@ -904,6 +904,15 @@
   .btn-primary:hover{background:#27635A!important}
   .btn-gold{background:#C78D45!important;border-color:#C78D45!important;color:#fff!important}
   .badge-teal{background:#E4EEEC!important;color:#27635A!important}
+  .absence-summary{display:grid;grid-template-columns:repeat(4,minmax(130px,1fr));gap:10px;margin:12px 0}
+  .absence-stat{padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--paper)}
+  .absence-stat strong{display:block;font-size:24px;color:var(--navy)}
+  .absence-controls{display:flex;flex-wrap:wrap;align-items:end;gap:10px}
+  .absence-controls .field{min-width:150px}
+  .absence-status{min-width:145px}
+  .absence-note{min-width:170px}
+  .absence-warning{color:var(--rose);font-weight:700}
+  @media(max-width:700px){.absence-summary{grid-template-columns:repeat(2,1fr)}.absence-table-wrap{overflow-x:auto}.absence-table-wrap table{min-width:760px}}
   @media(max-width:700px){header.integrated-header{padding:12px 14px 0}.integrated-header .integrated-title{align-items:flex-start;flex-direction:column;gap:5px}.integrated-header .schuljahr-badge{font-size:10px}.integrated-header nav.tabs{margin-top:5px}.integrated-header nav.tabs button{padding:9px 11px}main{padding:14px 12px 50px}}
 </style>
 </head>
@@ -922,6 +931,7 @@
     <button data-tab="stoff" onclick="showTab('stoff')">Planung des Unterrichts</button>
     <button data-tab="stoffuebersicht" onclick="showTab('stoffuebersicht')">Stoffverteilungsplan</button>
     <button data-tab="klassen" onclick="showTab('klassen')">Klassen &amp; Schüler</button>
+    <button data-tab="abwesenheit" onclick="showTab('abwesenheit')">Abwesenheiten</button>
     <button data-tab="noten" onclick="showTab('noten')">Noten</button>
     <button data-tab="kompetenz" onclick="showTab('kompetenz')">Kompetenzraster</button>
     <button data-tab="kann" onclick="showTab('kann')">Kann-Listen</button>
@@ -939,6 +949,7 @@
   <div id="panel-stoff" class="panel"></div>
   <div id="panel-stoffuebersicht" class="panel"></div>
   <div id="panel-klassen" class="panel"></div>
+  <div id="panel-abwesenheit" class="panel"></div>
   <div id="panel-noten" class="panel"></div>
   <div id="panel-kompetenz" class="panel"></div>
   <div id="panel-kann" class="panel"></div>
@@ -969,6 +980,7 @@ function defaultState(){
     klassen: [],
     faecher: [],
     schueler: [],
+    abwesenheiten: [],
     stoff: [],
     noten: [],
     kompetenzraster: [],
@@ -2081,6 +2093,7 @@ function renderAll(){
   renderStoff();
   renderStoffUebersicht();
   renderKlassen();
+  renderAbwesenheiten();
   renderNoten();
   renderKompetenz();
   renderKann();
@@ -3295,6 +3308,7 @@ function deleteKlasse(id){
   const schuelerIds = state.schueler.filter(s => s.klasseId === id).map(s => s.id);
   state.schueler = state.schueler.filter(s => s.klasseId !== id);
   state.noten = state.noten.filter(n => !schuelerIds.includes(n.schuelerId));
+  state.abwesenheiten = state.abwesenheiten.filter(a => !schuelerIds.includes(a.schuelerId));
   state.stoff = state.stoff.filter(s => s.klasseId !== id);
   state.kompetenzraster = state.kompetenzraster.filter(r => r.klasseId !== id);
   state.kannlisten = state.kannlisten.filter(l => l.klasseId !== id);
@@ -3437,11 +3451,134 @@ function cancelSchuelerEdit(){
 }
 
 function deleteSchueler(id){
-  if(!confirm('Schüler:in wirklich löschen? Zugehörige Noten werden ebenfalls entfernt.')) return;
+  if(!confirm('Schüler:in wirklich löschen? Zugehörige Noten und Abwesenheiten werden ebenfalls entfernt.')) return;
   state.schueler = state.schueler.filter(s => s.id !== id);
   state.noten = state.noten.filter(n => n.schuelerId !== id);
+  state.abwesenheiten = state.abwesenheiten.filter(a => a.schuelerId !== id);
   saveState();
   renderKlassen();
+}
+
+/* ===================== ABWESENHEITEN ===================== */
+let abwesenheitKlasseId = null;
+let abwesenheitDatum = todayISO();
+let abwesenheitSchuljahrId = null;
+
+function abwesenheitSchuljahr(){
+  const aktuell = aktuellesSchuljahr();
+  if(abwesenheitSchuljahrId && state.schuljahre.some(s => s.id === abwesenheitSchuljahrId)){
+    return state.schuljahre.find(s => s.id === abwesenheitSchuljahrId);
+  }
+  abwesenheitSchuljahrId = aktuell ? aktuell.id : (state.schuljahre[0] && state.schuljahre[0].id);
+  return state.schuljahre.find(s => s.id === abwesenheitSchuljahrId) || null;
+}
+
+function abwesenheitEintrag(schuelerId, datum){
+  return state.abwesenheiten.find(a => a.schuelerId === schuelerId && a.datum === datum);
+}
+
+function setAbwesenheit(schuelerId, feld, wert){
+  let eintrag = abwesenheitEintrag(schuelerId, abwesenheitDatum);
+  if(feld === 'status' && wert === 'anwesend'){
+    state.abwesenheiten = state.abwesenheiten.filter(a => !(a.schuelerId === schuelerId && a.datum === abwesenheitDatum));
+    saveState();
+    renderAbwesenheiten();
+    return;
+  }
+  if(!eintrag){
+    eintrag = {id:uid(), schuelerId, datum:abwesenheitDatum, status:'entschuldigt', stunden:1, minuten:0, notiz:''};
+    state.abwesenheiten.push(eintrag);
+  }
+  if(feld === 'stunden') eintrag.stunden = Math.max(0, Math.min(12, Number(wert) || 0));
+  else if(feld === 'minuten') eintrag.minuten = Math.max(0, Math.min(600, Number(wert) || 0));
+  else eintrag[feld] = wert;
+  saveState();
+  if(feld === 'status') renderAbwesenheiten();
+}
+
+function abwesenheitWerte(schuelerId, schuljahr){
+  const liste = state.abwesenheiten.filter(a => a.schuelerId === schuelerId && (!schuljahr || (a.datum >= schuljahr.von && a.datum <= schuljahr.bis)));
+  const entschuldigt = liste.filter(a => a.status === 'entschuldigt');
+  const unentschuldigt = liste.filter(a => a.status === 'unentschuldigt');
+  const verspaetet = liste.filter(a => a.status === 'verspaetet');
+  const tage = arr => new Set(arr.map(a => a.datum)).size;
+  const stunden = arr => arr.reduce((sum,a) => sum + (Number(a.stunden) || 0), 0);
+  return {liste, entschuldigtTage:tage(entschuldigt), entschuldigtStunden:stunden(entschuldigt), unentschuldigtTage:tage(unentschuldigt), unentschuldigtStunden:stunden(unentschuldigt), verspaetungen:verspaetet.length, minuten:verspaetet.reduce((sum,a)=>sum+(Number(a.minuten)||0),0)};
+}
+
+function renderAbwesenheiten(){
+  const el = document.getElementById('panel-abwesenheit');
+  if(!el) return;
+  if(abwesenheitKlasseId && !state.klassen.some(k => k.id === abwesenheitKlasseId)) abwesenheitKlasseId = null;
+  if(!abwesenheitKlasseId && state.klassen.length) abwesenheitKlasseId = state.klassen.slice().sort((a,b)=>a.name.localeCompare(b.name,'de'))[0].id;
+  const sj = abwesenheitSchuljahr();
+  const schueler = abwesenheitKlasseId ? schuelerOfKlasse(abwesenheitKlasseId) : [];
+  const gesamt = schueler.reduce((sum,s) => {const w=abwesenheitWerte(s.id,sj);sum.e+=w.entschuldigtStunden;sum.u+=w.unentschuldigtStunden;sum.v+=w.verspaetungen;sum.m+=w.minuten;return sum;},{e:0,u:0,v:0,m:0});
+  el.innerHTML = `
+    <div class="card no-print">
+      <div class="toolbar"><div><h2 style="margin:0;">Abwesenheiten erfassen</h2><p class="hint">Anwesenheit und Fehlzeiten werden ausschließlich lokal auf diesem Gerät gespeichert.</p></div>
+        <div><button class="btn btn-outline" onclick="downloadSchuelerVorlage()">↓ CSV-Vorlage</button> <button class="btn btn-primary" onclick="document.getElementById('schuelerCsvImport').click()">↑ Schüler importieren</button><input id="schuelerCsvImport" type="file" accept=".csv,text/csv" hidden onchange="importSchuelerCsv(event)"></div>
+      </div>
+      <div class="absence-controls">
+        <div class="field"><label>Klasse</label><select onchange="abwesenheitKlasseId=this.value;renderAbwesenheiten()">${klasseOptions(abwesenheitKlasseId)}</select></div>
+        <div class="field"><label>Datum</label><input type="date" value="${abwesenheitDatum}" onchange="abwesenheitDatum=this.value;renderAbwesenheiten()"></div>
+        <div class="field"><label>Auswertung</label><select onchange="abwesenheitSchuljahrId=this.value;renderAbwesenheiten()">${state.schuljahre.map(y=>`<option value="${y.id}" ${sj&&sj.id===y.id?'selected':''}>Schuljahr ${esc(y.bezeichnung)}</option>`).join('')}</select></div>
+        <button class="btn btn-outline" onclick="exportAbwesenheitenCsv()">↓ Auswertung als CSV</button>
+        <button class="btn btn-gold" onclick="window.print()">⎙ Drucken</button>
+      </div>
+    </div>
+    ${!state.klassen.length ? '<div class="card"><div class="empty-state"><span class="big">Noch keine Klasse</span>Importiere eine CSV-Datei oder lege unter „Klassen & Schüler“ eine Klasse an.</div></div>' : `
+    <div class="card">
+      <h2>Tagesliste — ${esc(klasseName(abwesenheitKlasseId))} · ${formatDatum(abwesenheitDatum)}</h2>
+      ${!schueler.length ? '<div class="empty-state">In dieser Klasse sind noch keine Schüler:innen vorhanden.</div>' : `<div class="absence-table-wrap"><table><thead><tr><th>Schüler:in</th><th>Status</th><th>Fehlstunden</th><th>Verspätung (Min.)</th><th>Bemerkung</th></tr></thead><tbody>${schueler.map(s=>{
+        const a=abwesenheitEintrag(s.id,abwesenheitDatum);const status=a?a.status:'anwesend';return `<tr><td><strong>${esc(s.nachname)}, ${esc(s.vorname)}</strong></td><td><select class="absence-status" onchange="setAbwesenheit('${s.id}','status',this.value)"><option value="anwesend" ${status==='anwesend'?'selected':''}>Anwesend</option><option value="entschuldigt" ${status==='entschuldigt'?'selected':''}>Entschuldigt</option><option value="unentschuldigt" ${status==='unentschuldigt'?'selected':''}>Unentschuldigt</option><option value="verspaetet" ${status==='verspaetet'?'selected':''}>Verspätet</option></select></td><td><input type="number" min="0" max="12" step="1" value="${a&&a.stunden||0}" ${status==='anwesend'||status==='verspaetet'?'disabled':''} onchange="setAbwesenheit('${s.id}','stunden',this.value)" style="width:85px"></td><td><input type="number" min="0" max="600" step="1" value="${a&&a.minuten||0}" ${status!=='verspaetet'?'disabled':''} onchange="setAbwesenheit('${s.id}','minuten',this.value)" style="width:95px"></td><td><input class="absence-note" value="${a?esc(a.notiz):''}" ${status==='anwesend'?'disabled':''} onchange="setAbwesenheit('${s.id}','notiz',this.value)" placeholder="optional"></td></tr>`}).join('')}</tbody></table></div>`}
+    </div>
+    <div class="card">
+      <h2>Schuljahresauswertung — ${esc(klasseName(abwesenheitKlasseId))}${sj?' · '+esc(sj.bezeichnung):''}</h2>
+      <div class="absence-summary"><div class="absence-stat"><strong>${gesamt.e}</strong>entschuldigte Stunden</div><div class="absence-stat"><strong class="${gesamt.u?'absence-warning':''}">${gesamt.u}</strong>unentschuldigte Stunden</div><div class="absence-stat"><strong>${gesamt.v}</strong>Verspätungen</div><div class="absence-stat"><strong>${gesamt.m}</strong>Minuten verspätet</div></div>
+      ${!schueler.length?'':`<div class="absence-table-wrap"><table><thead><tr><th>Schüler:in</th><th>Entschuldigt</th><th>Unentschuldigt</th><th>Verspätungen</th><th>Minuten</th></tr></thead><tbody>${schueler.map(s=>{const w=abwesenheitWerte(s.id,sj);return `<tr><td><strong>${esc(s.nachname)}, ${esc(s.vorname)}</strong></td><td>${w.entschuldigtTage} Tage / ${w.entschuldigtStunden} Std.</td><td class="${w.unentschuldigtStunden?'absence-warning':''}">${w.unentschuldigtTage} Tage / ${w.unentschuldigtStunden} Std.</td><td>${w.verspaetungen}</td><td>${w.minuten}</td></tr>`}).join('')}</tbody></table></div>`}
+    </div>`}`;
+}
+
+function csvZeileTeilen(zeile, trenner){
+  const zellen=[];let zelle='',inAnf=false;
+  for(let i=0;i<zeile.length;i++){const c=zeile[i];if(c==='"'&&inAnf&&zeile[i+1]==='"'){zelle+='"';i++;}else if(c==='"')inAnf=!inAnf;else if(c===trenner&&!inAnf){zellen.push(zelle.trim());zelle='';}else zelle+=c;}
+  zellen.push(zelle.trim());return zellen;
+}
+
+function downloadSchuelerVorlage(){
+  const text='Klasse;Nachname;Vorname;Geburtsdatum\n7b;Mustermann;Mia;2013-04-18\n7b;Beispiel;Noah;2012-11-03\n';
+  const blob=new Blob(['\uFEFF'+text],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='schueler-import-vorlage.csv';a.click();URL.revokeObjectURL(url);
+}
+
+async function importSchuelerCsv(event){
+  const file=event.target.files[0];if(!file)return;
+  try{
+    const text=await file.text(),zeilen=text.replace(/^\uFEFF/,'').split(/\r?\n/).filter(z=>z.trim());
+    if(zeilen.length<2) throw new Error('Die Datei enthält keine Schülerdaten.');
+    const trenner=(zeilen[0].match(/;/g)||[]).length >= (zeilen[0].match(/,/g)||[]).length ? ';' : ',';
+    const kopf=csvZeileTeilen(zeilen[0],trenner).map(x=>x.toLowerCase().replace(/[\s_-]/g,''));
+    const spalte=(...namen)=>namen.map(n=>kopf.indexOf(n)).find(i=>i>=0);
+    const ki=spalte('klasse','class'),ni=spalte('nachname','familienname','lastname'),vi=spalte('vorname','firstname'),gi=spalte('geburtsdatum','geburtstag','birthdate');
+    if(ki===undefined||ni===undefined||vi===undefined) throw new Error('Benötigte Spalten: Klasse, Nachname und Vorname.');
+    let hinzu=0,uebersprungen=0;
+    for(const zeile of zeilen.slice(1)){
+      const z=csvZeileTeilen(zeile,trenner),klassenname=(z[ki]||'').trim(),nachname=(z[ni]||'').trim(),vorname=(z[vi]||'').trim();
+      if(!klassenname||!nachname||!vorname){uebersprungen++;continue;}
+      let klasse=state.klassen.find(k=>k.name.toLowerCase()===klassenname.toLowerCase());if(!klasse){klasse={id:uid(),name:klassenname};state.klassen.push(klasse);}
+      if(state.schueler.some(s=>s.klasseId===klasse.id&&s.nachname.toLowerCase()===nachname.toLowerCase()&&s.vorname.toLowerCase()===vorname.toLowerCase())){uebersprungen++;continue;}
+      state.schueler.push({id:uid(),klasseId:klasse.id,nachname,vorname,geburtsdatum:gi!==undefined&&(z[gi]||'').trim()||null,foerderstatus:'kein Förderbedarf',traeger:'',pflichtschuljahr11:false,anschlussArt:null});hinzu++;
+    }
+    saveState();abwesenheitKlasseId=null;renderAll();alert(`${hinzu} Schüler:innen importiert. ${uebersprungen} Zeilen wurden übersprungen.`);
+  }catch(e){alert('Import fehlgeschlagen: '+e.message);}finally{event.target.value='';}
+}
+
+function exportAbwesenheitenCsv(){
+  const sj=abwesenheitSchuljahr(),schueler=abwesenheitKlasseId?schuelerOfKlasse(abwesenheitKlasseId):[];
+  const q=v=>'"'+String(v??'').replace(/"/g,'""')+'"';
+  const zeilen=[['Klasse','Nachname','Vorname','Schuljahr','Entschuldigte Tage','Entschuldigte Stunden','Unentschuldigte Tage','Unentschuldigte Stunden','Verspätungen','Minuten verspätet'].map(q).join(';')];
+  schueler.forEach(s=>{const w=abwesenheitWerte(s.id,sj);zeilen.push([klasseName(s.klasseId),s.nachname,s.vorname,sj?sj.bezeichnung:'',w.entschuldigtTage,w.entschuldigtStunden,w.unentschuldigtTage,w.unentschuldigtStunden,w.verspaetungen,w.minuten].map(q).join(';'));});
+  const blob=new Blob(['\uFEFF'+zeilen.join('\n')],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=`Abwesenheiten-${klasseName(abwesenheitKlasseId)}-${sj?sj.bezeichnung:'gesamt'}.csv`.replace(/[\\/:*?"<>|]/g,'_');a.click();URL.revokeObjectURL(url);
 }
 
 /* ===================== NOTEN ===================== */
@@ -4683,7 +4820,7 @@ ladeLogo();
 renderLehrerZeile();
 renderAll();
 const eingebetteterTab = new URLSearchParams(window.location.search).get('tab');
-if(['uebersicht','aufgaben','stoff','stoffuebersicht','klassen','noten','kompetenz','kann','klassenlisten'].includes(eingebetteterTab)) showTab(eingebetteterTab);
+if(['uebersicht','aufgaben','stoff','stoffuebersicht','klassen','abwesenheit','noten','kompetenz','kann','klassenlisten'].includes(eingebetteterTab)) showTab(eingebetteterTab);
 
 </script>
 </body>
