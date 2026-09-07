@@ -3584,6 +3584,7 @@ function exportAbwesenheitenCsv(){
 /* ===================== NOTEN ===================== */
 let notenKlasseId = null;
 let notenSchuelerId = null;
+let notenEditingId = null;
 
 const NOTEN_KATEGORIEN = [
   {key:'lernkontrolle', label:'Lernkontrolle'},
@@ -3595,6 +3596,9 @@ function renderNoten(){
   const el = document.getElementById('panel-noten');
   if(notenKlasseId && !state.klassen.some(k => k.id === notenKlasseId)) notenKlasseId = null;
   if(!notenKlasseId && state.klassen.length > 0) notenKlasseId = state.klassen[0].id;
+  const schuelerDerKlasse = notenKlasseId ? schuelerOfKlasse(notenKlasseId) : [];
+  if(notenSchuelerId && !schuelerDerKlasse.some(s => s.id === notenSchuelerId)) notenSchuelerId = null;
+  if(!notenSchuelerId && schuelerDerKlasse.length) notenSchuelerId = schuelerDerKlasse[0].id;
 
   el.innerHTML = `
     <div class="card">
@@ -3606,8 +3610,24 @@ function renderNoten(){
           `).join('')}
       </div>
     </div>
-    ${notenKlasseId ? renderGewichtungCard() + renderNotenUebersicht() + renderNotenDetail() : ''}
+    ${notenKlasseId ? renderNotenSchuelerAuswahl() + renderNotenDetail() + renderNotenUebersicht() + renderGewichtungCard() : ''}
   `;
+}
+
+function renderNotenSchuelerAuswahl(){
+  const liste = schuelerOfKlasse(notenKlasseId);
+  if(!liste.length) return '';
+  return `
+    <div class="card no-print">
+      <div class="field-row" style="margin-bottom:0;align-items:end;">
+        <div class="field grow">
+          <label>Schüler:in für Noteneingabe und Bearbeitung auswählen</label>
+          <select onchange="notenSchuelerId=this.value;notenEditingId=null;renderNoten()">
+            ${liste.map(s=>`<option value="${s.id}" ${s.id===notenSchuelerId?'selected':''}>${esc(s.nachname)}, ${esc(s.vorname)}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+    </div>`;
 }
 
 function gewichtungFuerKlasse(klasseId){
@@ -3767,7 +3787,7 @@ function renderNotenUebersicht(){
     const zellen = kategorien.map(({kat, spalten}) => {
       const noteZellen = spalten.map(sp => {
         const n = findeNote(s.id, kat.key, sp);
-        return `<td class="noten-kat-${kat.key}-light">${n ? n.wert : ''}</td>`;
+        return `<td class="noten-kat-${kat.key}-light">${n ? `<button class="icon-btn no-print" onclick="notenSchuelerId='${s.id}';notenEditingId='${n.id}';renderNoten()" title="Note bearbeiten">${n.wert} ✎</button><span class="print-only">${n.wert}</span>` : ''}</td>`;
       }).join('');
       const schnitt = schnittFuer(s.id, kat.key);
       return noteZellen + `<td class="noten-kat-${kat.key}-light"><strong>${formatKomma(schnitt, 1)}</strong></td>`;
@@ -3823,6 +3843,7 @@ function renderNotenDetail(){
 function renderNotenKategorie(schuelerId, kat){
   const eintraege = state.noten.filter(n => n.schuelerId === schuelerId && n.kategorie === kat.key)
     .sort((a,b) => (a.datum||'').localeCompare(b.datum||''));
+  const editing = notenEditingId ? eintraege.find(n => n.id === notenEditingId) : null;
   return `
     <div style="border-top:1px solid var(--line); padding-top:14px; margin-top:14px;">
       <h3 style="font-family:var(--font-head); font-size:15px; margin:0 0 8px 0; color:var(--navy);">${kat.label}</h3>
@@ -3838,7 +3859,7 @@ function renderNotenKategorie(schuelerId, kat){
               <td>
                 <input type="number" min="0" step="1" value="${n.gewicht === undefined || n.gewicht === null ? 100 : n.gewicht}" style="width:70px;" onchange="setNoteGewicht('${n.id}', this.value)"> %
               </td>
-              <td><button class="icon-btn" onclick="deleteNote('${n.id}')" title="Löschen">✕</button></td>
+              <td><button class="icon-btn" onclick="notenEditingId='${n.id}';renderNoten()" title="Bearbeiten">✎</button> <button class="icon-btn" onclick="deleteNote('${n.id}')" title="Löschen">✕</button></td>
             </tr>`).join('')}
         </tbody>
       </table>
@@ -3846,29 +3867,30 @@ function renderNotenKategorie(schuelerId, kat){
       <div class="field-row" style="margin-bottom:0;">
         <div class="field grow">
           <label>Bezeichnung</label>
-          <input type="text" id="note-bez-${kat.key}" placeholder="z. B. Test Bruchrechnung">
+          <input type="text" id="note-bez-${kat.key}" placeholder="z. B. Test Bruchrechnung" value="${editing?esc(editing.bezeichnung):''}">
         </div>
         <div class="field" style="max-width:100px;">
           <label>Note</label>
           <select id="note-wert-${kat.key}">
-            ${[1,2,3,4,5,6].map(n => `<option value="${n}">${n}</option>`).join('')}
+            ${[1,2,3,4,5,6].map(n => `<option value="${n}" ${editing&&Number(editing.wert)===n?'selected':''}>${n}</option>`).join('')}
           </select>
         </div>
         <div class="field" style="max-width:150px;">
           <label>Datum</label>
-          <input type="date" id="note-datum-${kat.key}">
+          <input type="date" id="note-datum-${kat.key}" value="${editing&&editing.datum?editing.datum:''}">
         </div>
         <div class="field" style="max-width:120px;">
           <label>Gewichtung (%)</label>
-          <input type="number" min="0" step="1" id="note-gewicht-${kat.key}" value="100">
+          <input type="number" min="0" step="1" id="note-gewicht-${kat.key}" value="${editing&&(editing.gewicht!==undefined&&editing.gewicht!==null)?editing.gewicht:100}">
         </div>
-        <button class="btn btn-outline" onclick="addNote('${schuelerId}','${kat.key}')">+ Hinzufügen</button>
+        <button class="btn ${editing?'btn-primary':'btn-outline'}" onclick="saveNote('${schuelerId}','${kat.key}')">${editing?'✓ Änderungen speichern':'+ Hinzufügen'}</button>
+        ${editing?'<button class="btn btn-outline" onclick="notenEditingId=null;renderNoten()">Abbrechen</button>':''}
       </div>
     </div>
   `;
 }
 
-function addNote(schuelerId, kategorie){
+function saveNote(schuelerId, kategorie){
   const bezeichnung = document.getElementById(`note-bez-${kategorie}`).value.trim();
   const wert = parseFloat(document.getElementById(`note-wert-${kategorie}`).value);
   const datum = document.getElementById(`note-datum-${kategorie}`).value;
@@ -3878,7 +3900,10 @@ function addNote(schuelerId, kategorie){
     alert('Bitte eine Bezeichnung angeben.');
     return;
   }
-  state.noten.push({id: uid(), schuelerId, kategorie, bezeichnung, wert, datum, gewicht: isNaN(gewicht) ? 100 : gewicht});
+  const vorhanden = notenEditingId ? state.noten.find(n => n.id === notenEditingId && n.schuelerId === schuelerId && n.kategorie === kategorie) : null;
+  if(vorhanden) Object.assign(vorhanden,{bezeichnung,wert,datum,gewicht:isNaN(gewicht)?100:gewicht});
+  else state.noten.push({id: uid(), schuelerId, kategorie, bezeichnung, wert, datum, gewicht: isNaN(gewicht) ? 100 : gewicht});
+  notenEditingId = null;
   saveState();
   renderNoten();
 }
@@ -3894,6 +3919,7 @@ function setNoteGewicht(id, wert){
 function deleteNote(id){
   if(!confirm('Note wirklich löschen?')) return;
   state.noten = state.noten.filter(n => n.id !== id);
+  if(notenEditingId === id) notenEditingId = null;
   saveState();
   renderNoten();
 }
